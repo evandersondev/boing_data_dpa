@@ -1,0 +1,7 @@
+boing:
+  datasource:
+    url: postgres://localhost:5432/mydb
+    username: "user"
+    password: "password"
+  migrations:
+    # path: bin/migrations

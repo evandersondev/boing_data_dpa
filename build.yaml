@@ -1,0 +1,43 @@
+targets:
+  $default:
+    builders:
+      dpa_entity_generator:
+        enabled: true
+        options:
+          inputs:
+            - lib/**.dart
+      # migration_generator:
+      #   enabled: true
+      #   options:
+      #     inputs:
+      #       - lib/**.dart
+      dpa_repository_generator:
+        enabled: true
+        options:
+          inputs:
+            - lib/**.dart
+
+builders:
+  dpa_entity_generator:
+    import: "package:boing_data_dpa/src/generators/dpa_entity_generator.dart"
+    builder_factories: ["dpaEntityGeneratorFactory"]
+    build_extensions: { ".dart": ["entity.g.part"] }
+    auto_apply: dependents
+    build_to: cache
+    applies_builders: ["source_gen|combining_builder"]
+    runs_before: ["dpa_repository_generator", "migration_generator"]
+
+  # migration_generator:
+  #   import: "package:boing_data_dpa/src/generators/dpa_migration_generator.dart"
+  #   builder_factories: ["dpaMigrationGeneratorFactory"]
+  #   build_extensions: { "$package$": ["database/migration.sql"] }
+  #   auto_apply: root_package
+  #   build_to: source
+
+  dpa_repository_generator:
+    import: "package:boing_data_dpa/src/generators/dpa_repository_generator.dart"
+    builder_factories: ["dpaRepositoryGeneratorFactory"]
+    build_extensions: { ".dart": ["repository.g.part"] }
+    auto_apply: dependents
+    build_to: cache
+    applies_builders: ["source_gen|combining_builder"]
