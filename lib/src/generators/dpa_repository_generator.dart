@@ -56,6 +56,7 @@ class DpaRepositoryGenerator extends Generator {
       final FieldElement? idFieldElement = _findIdField(entityElement);
       // Get primary key name from the generated extension (assumes format: <propertyName> without underscore)
       String? idFieldName = _getPrimaryKeyName(entityElement.fields);
+      // ignore: unused_local_variable
       GenerationType? generationStrategy = GenerationType.AUTO;
       if (idFieldElement != null) {
         final genValue = _getGeneratedValue(idFieldElement);

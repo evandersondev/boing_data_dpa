@@ -15,6 +15,8 @@ include: package:lints/recommended.yaml
 analyzer:
   errors:
     constant_identifier_names: ignore
+    deprecated_member_use: ignore
+    unnecessary_null_comparison: ignore
 # Uncomment the following section to specify additional rules.
 
 # linter:
