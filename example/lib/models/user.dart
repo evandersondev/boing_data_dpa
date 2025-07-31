@@ -16,11 +16,11 @@ class User {
   late String _email;
   late String _password;
 
-  @Column()
+  @Column(name: 'created_at')
   @Temporal(TemporalType.DATE)
   late DateTime _createdAt;
 
-  @Column()
+  @Column(name: 'updated_at')
   @Temporal(TemporalType.DATE)
   late DateTime _updatedAt;
 }

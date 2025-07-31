@@ -1,25 +1,26 @@
-/// Define a entity in DPA
+/// Define uma entidade no DPA
 class Entity {
   const Entity();
 }
 
-/// Define a table in DPA
+/// Define uma tabela no DPA
 class Table {
   final String name;
-  const Table({required this.name});
+  final List<String> indexes;
+  const Table({required this.name, this.indexes = const []});
 }
 
-/// Define a getter and setter for a field in DPA
+/// Define um getter e setter para um campo no DPA
 class Data {
   const Data();
 }
 
-/// Define a primary key in DPA
+/// Define uma chave primária no DPA
 class Id {
   const Id();
 }
 
-/// Defines the generation strategy for primary keys
+/// Define a estratégia de geração para chaves primárias
 enum GenerationType { AUTO, UUID, CUID }
 
 class GeneratedValue {
@@ -27,18 +28,21 @@ class GeneratedValue {
   const GeneratedValue({this.strategy = GenerationType.AUTO});
 }
 
-/// Defines a column in a table in DPA
+/// Define uma coluna em uma tabela no DPA
 class Column {
   final String? name;
   final bool unique;
+  final bool nullable;
   final String? columnDefinition;
-  const Column({this.name, this.unique = false, this.columnDefinition});
+  const Column({
+    this.name,
+    this.unique = false,
+    this.nullable = true,
+    this.columnDefinition,
+  });
 }
 
-/// Defines the temporal type for DateTime fields
-/// DATE: yyyy-MM-dd
-/// TIME: HH:mm:ss
-/// TIMESTAMP: yyyy-MM-ddTHH:mm:ss
+/// Define o tipo temporal para campos DateTime
 enum TemporalType { DATE, TIME, TIMESTAMP }
 
 class Temporal {
@@ -46,7 +50,7 @@ class Temporal {
   const Temporal(this.type);
 }
 
-/// Defines an enumeration mapping strategy
+/// Define a estratégia de mapeamento para enums
 enum EnumType { ORDINAL, STRING }
 
 class Enumerated {
@@ -54,30 +58,43 @@ class Enumerated {
   const Enumerated(this.type);
 }
 
-/// Defines a transient field (not persisted in the database)
+/// Define um campo transitório (não persistido no banco)
 class Transient {
   const Transient();
 }
 
-/// Defines an ElementCollection for storing lists or maps
+/// Define uma coleção de elementos para listas ou mapas
 class ElementCollection {
-  const ElementCollection();
+  final String? collectionTable;
+  const ElementCollection({this.collectionTable});
 }
 
-/// Defines the JoinColumn annotation for relationships
+/// Define uma coluna de junção para relacionamentos
 class JoinColumn {
   final String name;
-  const JoinColumn({required this.name});
+  final bool nullable;
+  const JoinColumn({required this.name, this.nullable = true});
 }
 
-/// Defines a Many-to-One relationship
+/// Define um relacionamento Many-to-One
 class ManyToOne {
-  const ManyToOne();
+  final String? fetch;
+  const ManyToOne({this.fetch = 'LAZY'});
 }
 
-/// Defines a One-to-Many relationship
+/// Define um relacionamento One-to-Many
 class OneToMany {
   final String mappedBy;
   final bool orphanRemoval;
-  const OneToMany({required this.mappedBy, this.orphanRemoval = false});
+  final String? fetch;
+  const OneToMany({
+    required this.mappedBy,
+    this.orphanRemoval = false,
+    this.fetch = 'LAZY',
+  });
+}
+
+/// Define um campo de versionamento para controle otimista
+class Version {
+  const Version();
 }

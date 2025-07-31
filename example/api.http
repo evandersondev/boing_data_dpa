@@ -1,0 +1,25 @@
+GET http://localhost:8080/users
+
+###
+
+POST http://localhost:8080/users
+Content-Type: application/json
+
+{
+    "name": "John",
+    "surname": "Doe",
+    "email": "johndoe@mail.com",
+    "password": "123456",
+    "created_at": "2025-07-31",
+    "updated_at": "2025-07-31"
+}
+
+###
+
+PUT http://localhost:8080/users/9672eab2-5706-4ffc-a974-ce7308c8578f
+Content-Type: application/json
+
+{
+    "name": "John",
+    "surname": "Atualizado"
+}

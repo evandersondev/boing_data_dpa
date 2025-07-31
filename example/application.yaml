@@ -1,7 +1,9 @@
 boing:
   datasource:
-    url: postgres://localhost:5432/mydb
-    username: "user"
-    password: "password"
-  migrations:
-    # path: bin/migrations
+    url: "sqlite://database.db"
+  # datasource:
+  #   url: postgres://localhost:5432/mydb
+  #   username: "user"
+  #   password: "password"
+  # migrations:
+  # path: bin/migrations

@@ -6,6 +6,8 @@ import '../annotations/annotations.dart';
 
 class DpaEntityGenerator extends GeneratorForAnnotation<Entity> {
   final _columnChecker = const TypeChecker.fromRuntime(Column);
+  final _temporalChecker = const TypeChecker.fromRuntime(Temporal);
+  final _transientChecker = const TypeChecker.fromRuntime(Transient);
 
   @override
   String generateForAnnotatedElement(
@@ -13,11 +15,28 @@ class DpaEntityGenerator extends GeneratorForAnnotation<Entity> {
     ConstantReader annotation,
     BuildStep buildStep,
   ) {
-    // Gera apenas para classes.
     if (element is! ClassElement) return '';
 
     final className = element.name;
     final fields = element.fields.where((f) => !f.isStatic).toList();
+
+    // Verifica se existe um campo com @Id
+    if (!fields.any(
+      (f) => const TypeChecker.fromRuntime(Id).hasAnnotationOf(f),
+    )) {
+      throw StateError(
+        'A entidade $className deve ter pelo menos um campo anotado com @Id',
+      );
+    }
+
+    // Verifica se existe um construtor padrão
+    if (!element.constructors.any(
+      (c) => c.name.isEmpty && c.parameters.isEmpty,
+    )) {
+      throw StateError(
+        'A entidade $className deve ter um construtor padrão sem parâmetros',
+      );
+    }
 
     final primaryKeyName = _getPrimaryKeyName(fields);
     final primaryKeyGenerationType = _getPrimaryKeyGenerationType(fields);
@@ -43,17 +62,15 @@ $fromMapMethod
   }
 
   String _getPrimaryKeyName(List<FieldElement> fields) {
-    String fieldName = '';
-
     for (final field in fields) {
       final idChecker = const TypeChecker.fromRuntime(Id);
       if (idChecker.hasAnnotationOf(field)) {
-        fieldName = field.name.substring(1);
-        break;
+        final fieldName =
+            field.name.startsWith('_') ? field.name.substring(1) : field.name;
+        return "static String primaryKeyName = '$fieldName';";
       }
     }
-
-    return "static String primaryKeyName = '$fieldName';";
+    return '';
   }
 
   String _getPrimaryKeyGenerationType(List<FieldElement> fields) {
@@ -70,7 +87,7 @@ $fromMapMethod
       }
     }
 
-    return 'static GenerationType primaryKeyGenerationType = $generationType;';
+    return 'static GenerationType primaryKeyGenerationType = GenerationType.$generationType;';
   }
 
   GeneratedValue? _getGeneratedValue(FieldElement field) {
@@ -79,11 +96,9 @@ $fromMapMethod
     ).firstAnnotationOf(field, throwOnUnresolved: false);
     if (annotation != null) {
       final strategyField = annotation.getField('strategy');
-      if (strategyField != null) {
-        final index = strategyField.getField('index')?.toIntValue();
-        if (index != null && index < GenerationType.values.length) {
-          return GeneratedValue(strategy: GenerationType.values[index]);
-        }
+      final index = strategyField?.getField('index')?.toIntValue();
+      if (index != null && index < GenerationType.values.length) {
+        return GeneratedValue(strategy: GenerationType.values[index]);
       }
       return GeneratedValue();
     }
@@ -93,10 +108,10 @@ $fromMapMethod
   String _generateGettersAndSetters(List<FieldElement> fields) {
     final buffer = StringBuffer();
     for (final field in fields) {
+      if (_transientChecker.hasAnnotationOf(field)) continue;
       final fieldName = field.name;
       final getterName =
           fieldName.startsWith('_') ? fieldName.substring(1) : fieldName;
-
       buffer.writeln(
         '  ${field.type.getDisplayString(withNullability: true)} get $getterName => $fieldName;',
       );
@@ -109,21 +124,22 @@ $fromMapMethod
 
   String _generateCopyMethod(String className, List<FieldElement> fields) {
     final parameters = fields
+        .where((f) => !_transientChecker.hasAnnotationOf(f))
         .map((f) {
-          // Get the display string with nullability.
           final typeStr = f.type.getDisplayString(withNullability: true);
-          // If the type already ends with '?' then keep it, otherwise append '?'.
           final paramType = typeStr.endsWith('?') ? typeStr : '$typeStr?';
-          return '$paramType ${f.name.substring(1)}';
+          return '$paramType ${f.name.startsWith('_') ? f.name.substring(1) : f.name}';
         })
         .join(', ');
 
     final assignments = fields
+        .where((f) => !_transientChecker.hasAnnotationOf(f))
         .map((f) {
-          final fieldName = f.name.substring(1);
+          final fieldName =
+              f.name.startsWith('_') ? f.name.substring(1) : f.name;
           return '..$fieldName = $fieldName ?? ${f.name}';
         })
-        .join('\n');
+        .join('\n      ');
 
     return '''
   $className copy({$parameters}) {
@@ -135,10 +151,13 @@ $fromMapMethod
 
   String _generateFromMapMethod(String className, List<FieldElement> fields) {
     final assignments = fields
+        .where((f) => !_transientChecker.hasAnnotationOf(f))
         .map((f) {
-          return '..${f.name.substring(1)} = ${_formatFromMap(f)}';
+          final fieldName =
+              f.name.startsWith('_') ? f.name.substring(1) : f.name;
+          return '..$fieldName = ${_formatFromMap(f)}';
         })
-        .join('\n');
+        .join('\n      ');
 
     return '''
   $className fromMap(Map<String, dynamic> map) {
@@ -150,45 +169,47 @@ $fromMapMethod
 
   String _generateToMapMethod(String className, List<FieldElement> fields) {
     final mapEntries = fields
+        .where((f) => !_transientChecker.hasAnnotationOf(f))
         .map((f) {
-          if (f.type.getDisplayString(withNullability: false).endsWith('?')) {
+          final columnName = _getColumnName(f);
+          final fieldName =
+              f.name.startsWith('_') ? f.name.substring(1) : f.name;
+          if (f.type.getDisplayString(withNullability: true).endsWith('?')) {
             return '''
-      if (${f.name.substring(1)} != null) {
-        map.addAll({'${_toSnakeCase(f.name.substring(1))}': ${_formatToMap(f)} });
-      }
+    if ($fieldName != null) {
+      map['$columnName'] = ${_formatToMap(f)};
+    }
 ''';
           }
-
-          return '''map.addAll({'${_toSnakeCase(f.name.substring(1))}': ${_formatToMap(f)} });''';
+          return '''map['$columnName'] = ${_formatToMap(f)};''';
         })
-        .join('\n');
+        .join('\n    ');
 
     return '''
   Map<String, dynamic> toMap() {
-    Map<String, dynamic> map = {};
-
+    final map = <String, dynamic>{};
     $mapEntries
-
     return map;
   }
 ''';
   }
 
-  /// Converte um nome de variável/campo para snake_case.
   String _toSnakeCase(String input) {
     if (input.isEmpty) return input;
     final buffer = StringBuffer();
     for (int i = 0; i < input.length; i++) {
-      if (i > 0 && input[i].toUpperCase() == input[i]) {
+      final char = input[i];
+      if (i > 0 &&
+          char.toUpperCase() == char &&
+          char != '_' &&
+          !RegExp(r'[0-9]').hasMatch(char)) {
         buffer.write('_');
       }
-      buffer.write(input[i].toLowerCase());
+      buffer.write(char.toLowerCase());
     }
     return buffer.toString();
   }
 
-  /// Obtém o nome da coluna definido pela annotation [Column] se presente,
-  /// caso contrário utiliza o nome do campo convertido para snake_case.
   String _getColumnName(FieldElement field) {
     final columnAnnotation = _columnChecker.firstAnnotationOf(
       field,
@@ -201,56 +222,58 @@ $fromMapMethod
         return nameValue;
       }
     }
-    return _toSnakeCase(field.name);
+    return _toSnakeCase(
+      field.name.startsWith('_') ? field.name.substring(1) : field.name,
+    );
   }
 
-  /// Retorna apenas a expressão de conversão para extrair o valor do mapa
-  /// para o campo, utilizando a chave definida via annotation [Column] ou snake_case.
   String _formatFromMap(FieldElement field) {
-    final key = '"${_getColumnName(field).substring(1)}"';
+    final columnName = _getColumnName(field);
+    final type = field.type.getDisplayString(withNullability: false);
     if (field.type.isDartCoreInt) {
-      return 'map[$key] as int';
+      return 'map["$columnName"] as int?';
     } else if (field.type.isDartCoreDouble) {
-      return 'map[$key] as double';
+      return 'map["$columnName"] as double?';
     } else if (field.type.isDartCoreBool) {
-      return '(map[$key] as int) == 1';
-    } else if (field.type.getDisplayString(withNullability: false) ==
-        'DateTime') {
-      return 'DateTime.parse("\${map[$key]}")';
+      return 'map["$columnName"] == 1';
+    } else if (type == 'DateTime') {
+      return 'map["$columnName"] != null ? DateTime.tryParse(map["$columnName"] as String) : null';
     }
-    return 'map[$key]';
+    return 'map["$columnName"] as ${field.type.getDisplayString(withNullability: true)}';
   }
 
-  /// Retorna apenas a expressão de conversão para inserir o valor do campo no mapa.
   String _formatToMap(FieldElement field) {
+    final fieldName =
+        field.name.startsWith('_') ? field.name.substring(1) : field.name;
+    final type = field.type.getDisplayString(withNullability: false);
     if (field.type.isDartCoreInt ||
         field.type.isDartCoreDouble ||
         field.type.isDartCoreString) {
-      return field.name.substring(1);
+      return fieldName;
     } else if (field.type.isDartCoreBool) {
-      return '${field.name.substring(1)} ? 1 : 0';
-    } else if (field.type.getDisplayString(withNullability: false) ==
-        'DateTime') {
-      // Verifica se há annotation Temporal para definir a formatação.
-      final temporalType = _getTemporalAnnotation(field);
-      if (temporalType == 'DATE') {
-        return '${field.name.substring(1)}.toIso8601String().split("T")[0]';
-      } else if (temporalType == 'TIME') {
-        return '${field.name.substring(1)}.toIso8601String().split("T")[1]';
+      return '$fieldName ? 1 : 0';
+    } else if (type == 'DateTime') {
+      final temporalType = _getTemporalAnnotation(field)?.type;
+      if (temporalType == TemporalType.DATE) {
+        return '$fieldName?.toIso8601String().split("T")[0]';
+      } else if (temporalType == TemporalType.TIME) {
+        return '$fieldName?.toIso8601String().split("T")[1].split(".")[0]';
       }
-      return '${field.name.substring(1)}.toIso8601String()';
+      return '$fieldName?.toIso8601String()';
     }
-    return field.name.substring(1);
+    return fieldName;
   }
 
-  /// Verifica se o campo possui a annotation Temporal e retorna o seu tipo (DATE, TIME, etc).
-  String? _getTemporalAnnotation(FieldElement field) {
-    for (final meta in field.metadata) {
-      final constantValue = meta.computeConstantValue();
-      if (constantValue != null &&
-          constantValue.type?.getDisplayString(withNullability: false) ==
-              'Temporal') {
-        return constantValue.getField('type')?.toStringValue();
+  Temporal? _getTemporalAnnotation(FieldElement field) {
+    final annotation = _temporalChecker.firstAnnotationOf(
+      field,
+      throwOnUnresolved: false,
+    );
+    if (annotation != null) {
+      final typeField = annotation.getField('type');
+      final index = typeField?.getField('index')?.toIntValue();
+      if (index != null && index < TemporalType.values.length) {
+        return Temporal(TemporalType.values[index]);
       }
     }
     return null;
